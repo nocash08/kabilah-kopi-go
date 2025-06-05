@@ -25,40 +25,34 @@ func (controller *UsersControllerImpl) Login(writer http.ResponseWriter, request
 
 	helper.ReadFromRequestBody(request, &usersLoginRequest)
 
-	usersResponse, tokenResponse := controller.UsersService.Login(request.Context(), writer, usersLoginRequest)
+	_, tokenResponse := controller.UsersService.Login(request.Context(), writer, usersLoginRequest)
+
+	// Create response with token
+	response := usersdto.UsersResponse{
+		Token: tokenResponse.AccessToken,
+	}
+
 	webResponse := dto.WebResponse{
 		Code:    http.StatusOK,
 		Status:  "OK",
 		Message: "Login successful",
-		Data:    usersResponse,
+		Data:    response,
 	}
 
 	helper.WriteToResponseBody(writer, webResponse)
-
-	helper.SetTokenCookie(writer, helper.AccessTokenCookie, tokenResponse.AccessToken, helper.AccessTokenDuration)
-
-	helper.WriteToResponseBody(writer, webResponse)
-}
-
-func (controller *UsersControllerImpl) RefreshToken(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
-	tokenResponse, err := controller.UsersService.RefreshToken(request.Context(), writer, request)
-	helper.PanicIfError(err)
-
-	webResponse := dto.WebResponse{
-		Code:    http.StatusOK,
-		Status:  "OK",
-		Message: "Refresh token successful",
-		Data:    tokenResponse,
-	}
-
-	helper.WriteToResponseBody(writer, webResponse)
-
-	helper.SetTokenCookie(writer, helper.AccessTokenCookie, tokenResponse.AccessToken, helper.AccessTokenDuration)
 }
 
 func (controller *UsersControllerImpl) Logout(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
-	err := controller.UsersService.Logout(request.Context(), writer)
-	helper.PanicIfError(err)
+	err := controller.UsersService.Logout(request.Context(), writer, request)
+	if err != nil {
+		webResponse := dto.WebResponse{
+			Code:    http.StatusUnauthorized,
+			Status:  "Unauthorized",
+			Message: err.Error(),
+		}
+		helper.WriteToResponseBody(writer, webResponse)
+		return
+	}
 
 	webResponse := dto.WebResponse{
 		Code:    http.StatusOK,
@@ -69,5 +63,20 @@ func (controller *UsersControllerImpl) Logout(writer http.ResponseWriter, reques
 	helper.WriteToResponseBody(writer, webResponse)
 
 	helper.ClearTokenCookie(writer, helper.AccessTokenCookie)
-	helper.ClearTokenCookie(writer, helper.RefreshTokenCookie)
+}
+
+func (controller *UsersControllerImpl) Register(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
+	usersRegisterRequest := usersdto.UsersRegisterRequest{}
+	helper.ReadFromRequestBody(request, &usersRegisterRequest)
+
+	user := controller.UsersService.Register(request.Context(), usersRegisterRequest)
+
+	webResponse := dto.WebResponse{
+		Code:    http.StatusCreated,
+		Status:  "Created",
+		Message: "User registered successfully",
+		Data:    user,
+	}
+
+	helper.WriteToResponseBody(writer, webResponse)
 }

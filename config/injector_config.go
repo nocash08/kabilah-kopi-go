@@ -41,7 +41,7 @@ func NewInjector(db *sql.DB, validate *validator.Validate) *Injector {
 
 	// Users dependencies
 	usersRepository := usersrepository.NewUsersRepository()
-	usersService := implementation.NewUsersService(usersRepository, db, validate, AppConfig.JWTSecret)
+	usersService := implementation.NewUsersService(usersRepository, nil, db, validate, AppConfig.JWTSecret)
 	usersController := userscontroller.NewUsersController(usersService)
 
 	return &Injector{

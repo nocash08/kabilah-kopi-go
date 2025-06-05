@@ -3,6 +3,7 @@ package exception
 import (
 	"backend/helper"
 	"backend/model/dto"
+	"fmt"
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
@@ -62,11 +63,29 @@ func internalServerError(w http.ResponseWriter, r *http.Request, err interface{}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusInternalServerError)
 
+	// Convert error to string for detailed message
+	var errorMessage string
+	if err != nil {
+		switch v := err.(type) {
+		case error:
+			errorMessage = v.Error()
+		case string:
+			errorMessage = v
+		default:
+			errorMessage = fmt.Sprintf("%v", v)
+		}
+	} else {
+		errorMessage = "Unknown error occurred"
+	}
+
 	webResponse := dto.WebResponse{
 		Code:    http.StatusInternalServerError,
 		Status:  "INTERNAL SERVER ERROR",
-		Message: "Internal Server Error",
+		Message: errorMessage,
 	}
+
+	// Log the error
+	fmt.Printf("Internal Server Error: %v\n", errorMessage)
 
 	helper.WriteToResponseBody(w, webResponse)
 }

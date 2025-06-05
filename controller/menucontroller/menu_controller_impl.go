@@ -84,9 +84,8 @@ func (controller *MenuControllerImpl) Update(writer http.ResponseWriter, request
 }
 
 func (controller *MenuControllerImpl) Delete(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
-
-	categoryId := params.ByName("categoryId")
-	id, err := strconv.Atoi(categoryId)
+	menuId := params.ByName("menuId")
+	id, err := strconv.Atoi(menuId)
 	helper.PanicIfError(err)
 
 	controller.MenuService.Delete(request.Context(), uint(id))
@@ -100,8 +99,8 @@ func (controller *MenuControllerImpl) Delete(writer http.ResponseWriter, request
 }
 
 func (controller *MenuControllerImpl) FindById(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
-	categoryId := params.ByName("categoryId")
-	id, err := strconv.Atoi(categoryId)
+	menuId := params.ByName("menuId")
+	id, err := strconv.Atoi(menuId)
 	helper.PanicIfError(err)
 
 	menuResponse := controller.MenuService.FindById(request.Context(), uint(id))
@@ -116,7 +115,6 @@ func (controller *MenuControllerImpl) FindById(writer http.ResponseWriter, reque
 }
 
 func (controller *MenuControllerImpl) FindAll(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
-
 	menuResponses := controller.MenuService.FindAll(request.Context())
 	webResponse := dto.WebResponse{
 		Code:    http.StatusOK,

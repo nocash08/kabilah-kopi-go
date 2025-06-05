@@ -1,6 +1,7 @@
 package interfaces
 
 import (
+	"backend/model/domain"
 	"backend/model/dto/authdto"
 	"backend/model/dto/usersdto"
 	"context"
@@ -8,7 +9,7 @@ import (
 )
 
 type UsersService interface {
-	Login(ctx context.Context, w http.ResponseWriter, request usersdto.UsersLoginRequest) (usersdto.UsersResponse, *authdto.TokenResponse)
-	RefreshToken(ctx context.Context, w http.ResponseWriter, r *http.Request) (*authdto.TokenResponse, error)
-	Logout(ctx context.Context, w http.ResponseWriter) error
+	Register(ctx context.Context, request usersdto.UsersRegisterRequest) domain.Users
+	Login(ctx context.Context, w http.ResponseWriter, request usersdto.UsersLoginRequest) (domain.Users, *authdto.TokenResponse)
+	Logout(ctx context.Context, w http.ResponseWriter, r *http.Request) error
 }

@@ -2,6 +2,7 @@ package helper
 
 import (
 	"errors"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -15,26 +16,19 @@ type JWTClaims struct {
 }
 
 type TokenDetails struct {
-	AccessToken  string
-	RefreshToken string
-	AccessUuid   string
-	RefreshUuid  string
-	AtExpires    int64
-	RtExpires    int64
+	AccessToken string
+	AccessUuid  string
+	AtExpires   int64
 }
 
 const (
-	AccessTokenDuration  = 15 * time.Minute
-	RefreshTokenDuration = 7 * 24 * time.Hour
+	AccessTokenDuration = 24 * time.Hour // Increased to 24 hours since we don't have refresh token
 )
 
 func GenerateTokens(userID uint, username string, isAdmin bool, secretKey string) (*TokenDetails, error) {
 	td := &TokenDetails{}
 	td.AtExpires = time.Now().Add(AccessTokenDuration).Unix()
 	td.AccessUuid = GenerateUUID()
-
-	td.RtExpires = time.Now().Add(RefreshTokenDuration).Unix()
-	td.RefreshUuid = GenerateUUID()
 
 	// Creating Access Token
 	atClaims := JWTClaims{
@@ -49,22 +43,6 @@ func GenerateTokens(userID uint, username string, isAdmin bool, secretKey string
 	at := jwt.NewWithClaims(jwt.SigningMethodHS256, atClaims)
 	var err error
 	td.AccessToken, err = at.SignedString([]byte(secretKey))
-	if err != nil {
-		return nil, err
-	}
-
-	// Creating Refresh Token
-	rtClaims := JWTClaims{
-		UserID:   userID,
-		Username: username,
-		IsAdmin:  isAdmin,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Unix(td.RtExpires, 0)),
-			ID:        td.RefreshUuid,
-		},
-	}
-	rt := jwt.NewWithClaims(jwt.SigningMethodHS256, rtClaims)
-	td.RefreshToken, err = rt.SignedString([]byte(secretKey))
 	if err != nil {
 		return nil, err
 	}
@@ -102,4 +80,12 @@ func RandomString(n int) string {
 		b[i] = letters[time.Now().UnixNano()%int64(len(letters))]
 	}
 	return string(b)
+}
+
+func GetJWTSecret() string {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		panic("JWT_SECRET environment variable is not set")
+	}
+	return secret
 }

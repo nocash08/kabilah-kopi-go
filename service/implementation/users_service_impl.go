@@ -2,6 +2,7 @@ package implementation
 
 import (
 	"backend/helper"
+	"backend/model/domain"
 	"backend/model/dto/authdto"
 	"backend/model/dto/usersdto"
 	"backend/repository/usersrepository"
@@ -10,8 +11,11 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type UsersServiceImpl struct {
@@ -21,7 +25,13 @@ type UsersServiceImpl struct {
 	JWTSecret       string
 }
 
-func NewUsersService(usersRepository usersrepository.UsersRepository, DB *sql.DB, validator *validator.Validate, jwtSecret string) interfaces.UsersService {
+func NewUsersService(
+	usersRepository usersrepository.UsersRepository,
+	_ interface{}, // Keep this parameter to maintain compatibility
+	DB *sql.DB,
+	validator *validator.Validate,
+	jwtSecret string,
+) interfaces.UsersService {
 	return &UsersServiceImpl{
 		UsersRepository: usersRepository,
 		DB:              DB,
@@ -30,9 +40,11 @@ func NewUsersService(usersRepository usersrepository.UsersRepository, DB *sql.DB
 	}
 }
 
-func (service *UsersServiceImpl) Login(ctx context.Context, w http.ResponseWriter, request usersdto.UsersLoginRequest) (usersdto.UsersResponse, *authdto.TokenResponse) {
+func (service *UsersServiceImpl) Login(ctx context.Context, w http.ResponseWriter, request usersdto.UsersLoginRequest) (domain.Users, *authdto.TokenResponse) {
 	err := service.Validator.Struct(request)
-	helper.PanicIfError(err)
+	if err != nil {
+		panic(err)
+	}
 
 	tx, err := service.DB.Begin()
 	if err != nil {
@@ -46,22 +58,24 @@ func (service *UsersServiceImpl) Login(ctx context.Context, w http.ResponseWrite
 	}
 
 	// Verify password
-	err = helper.VerifyPassword(hashedPassword, request.Password)
+	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(request.Password))
 	if err != nil {
 		panic(errors.New("invalid username or password"))
 	}
 
-	// Generate JWT tokens
+	// Generate JWT token
 	tokens, err := helper.GenerateTokens(user.Id, user.Username, user.IsAdmin, service.JWTSecret)
 	if err != nil {
 		panic(err)
 	}
 
-	// Set cookies
+	// Set access token cookie
 	helper.SetTokenCookie(w, helper.AccessTokenCookie, tokens.AccessToken, helper.AccessTokenDuration)
-	helper.SetTokenCookie(w, helper.RefreshTokenCookie, tokens.RefreshToken, helper.RefreshTokenDuration)
 
-	tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		panic(err)
+	}
 
 	return user, &authdto.TokenResponse{
 		AccessToken: tokens.AccessToken,
@@ -70,39 +84,72 @@ func (service *UsersServiceImpl) Login(ctx context.Context, w http.ResponseWrite
 	}
 }
 
-func (service *UsersServiceImpl) RefreshToken(ctx context.Context, w http.ResponseWriter, r *http.Request) (*authdto.TokenResponse, error) {
-	// Get refresh token from cookie
-	cookie, err := r.Cookie(helper.RefreshTokenCookie)
-	if err != nil {
-		return nil, errors.New("refresh token not found")
+func (service *UsersServiceImpl) Logout(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	// Get the Authorization header
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return errors.New("authorization header is required")
 	}
 
-	// Validate refresh token
-	claims, err := helper.ValidateToken(cookie.Value, service.JWTSecret)
-	if err != nil {
-		return nil, errors.New("invalid refresh token")
+	// Check if the header has the Bearer prefix
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return errors.New("invalid token format. Use 'Bearer <token>'")
 	}
 
-	// Generate new tokens
-	tokens, err := helper.GenerateTokens(claims.UserID, claims.Username, claims.IsAdmin, service.JWTSecret)
-	if err != nil {
-		return nil, err
+	// Extract the token
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	if tokenString == "" {
+		return errors.New("token is required")
 	}
 
-	// Set new cookies
-	helper.SetTokenCookie(w, helper.AccessTokenCookie, tokens.AccessToken, helper.AccessTokenDuration)
-	helper.SetTokenCookie(w, helper.RefreshTokenCookie, tokens.RefreshToken, helper.RefreshTokenDuration)
+	// Parse the token to get expiration time
+	token, err := jwt.ParseWithClaims(tokenString, &helper.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(service.JWTSecret), nil
+	})
+	if err != nil {
+		return errors.New("invalid or expired token")
+	}
 
-	return &authdto.TokenResponse{
-		AccessToken: tokens.AccessToken,
-		TokenType:   "Bearer",
-		ExpiresIn:   int(helper.AccessTokenDuration.Seconds()),
-	}, nil
+	claims, ok := token.Claims.(*helper.JWTClaims)
+	if !ok {
+		return errors.New("invalid token claims")
+	}
+
+	// Add token to invalidated tokens list
+	helper.AddToInvalidatedTokens(tokenString, claims.ExpiresAt.Time)
+
+	// Clear the access token cookie
+	helper.ClearTokenCookie(w, helper.AccessTokenCookie)
+	return nil
 }
 
-func (service *UsersServiceImpl) Logout(ctx context.Context, w http.ResponseWriter) error {
-	// Clear both tokens
-	helper.ClearTokenCookie(w, helper.AccessTokenCookie)
-	helper.ClearTokenCookie(w, helper.RefreshTokenCookie)
-	return nil
+func (service *UsersServiceImpl) Register(ctx context.Context, request usersdto.UsersRegisterRequest) domain.Users {
+	err := service.Validator.Struct(request)
+	helper.PanicIfError(err)
+
+	tx, err := service.DB.Begin()
+	helper.PanicIfError(err)
+	defer helper.CommitOrRollback(tx)
+
+	// Check if username already exists
+	_, _, err = service.UsersRepository.FindByUsername(ctx, tx, request.Username)
+	if err == nil {
+		panic(errors.New("username already exists"))
+	}
+
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
+	helper.PanicIfError(err)
+
+	// Check if this is the first user
+	userCount := service.UsersRepository.CountUsers(ctx, tx)
+	isAdmin := userCount == 0 // Make first user an admin
+
+	user := domain.Users{
+		Username: request.Username,
+		Password: string(hashedPassword),
+		IsAdmin:  isAdmin,
+	}
+
+	return service.UsersRepository.Create(ctx, tx, user)
 }

@@ -6,8 +6,7 @@ import (
 )
 
 const (
-	AccessTokenCookie  = "access_token"
-	RefreshTokenCookie = "refresh_token"
+	AccessTokenCookie = "access_token"
 )
 
 func SetTokenCookie(w http.ResponseWriter, name, token string, expiration time.Duration) {
