@@ -1,6 +1,7 @@
 package implementation
 
 import (
+	"backend/exception"
 	"backend/helper"
 	"backend/helper/mapper"
 	"backend/model/domain"
@@ -61,7 +62,9 @@ func (service *EventServiceImpl) Update(ctx context.Context, request eventdto.Ev
 	defer helper.CommitOrRollback(tx)
 
 	event, err := service.EventRepository.FindById(ctx, tx, request.Id)
-	helper.PanicIfError(err)
+	if err != nil {
+		panic(exception.NewNotFoundError(err.Error()))
+	}
 
 	if event.Thumbnail != "" {
 		if err := helper.DeleteFile(event.Thumbnail); err != nil {
@@ -88,7 +91,9 @@ func (service *EventServiceImpl) Delete(ctx context.Context, eventId uint) {
 	defer helper.CommitOrRollback(tx)
 
 	event, err := service.EventRepository.FindById(ctx, tx, eventId)
-	helper.PanicIfError(err)
+	if err != nil {
+		panic(exception.NewNotFoundError(err.Error()))
+	}
 
 	service.EventRepository.Delete(ctx, tx, event)
 }
@@ -109,7 +114,9 @@ func (service *EventServiceImpl) FindById(ctx context.Context, eventId uint) eve
 	defer helper.CommitOrRollback(tx)
 
 	event, err := service.EventRepository.FindById(ctx, tx, eventId)
-	helper.PanicIfError(err)
+	if err != nil {
+		panic(exception.NewNotFoundError(err.Error()))
+	}
 
 	return mapper.ToEventResponse(event)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 
+	"backend/exception"
 	"backend/helper"
 	"backend/helper/mapper"
 	"backend/model/domain"
@@ -55,7 +56,9 @@ func (service *AboutServiceImpl) Update(ctx context.Context, request aboutdto.Ab
 	defer helper.CommitOrRollback(tx)
 
 	about, err := service.AboutRepository.FindById(ctx, tx, request.Id)
-	helper.PanicIfError(err)
+	if err != nil {
+		panic(exception.NewNotFoundError(err.Error()))
+	}
 
 	about.Heading = request.Heading
 	about.Subheading = request.Subheading
@@ -81,7 +84,9 @@ func (service *AboutServiceImpl) FindById(ctx context.Context, aboutId uint) abo
 	defer helper.CommitOrRollback(tx)
 
 	about, err := service.AboutRepository.FindById(ctx, tx, aboutId)
-	helper.PanicIfError(err)
+	if err != nil {
+		panic(exception.NewNotFoundError(err.Error()))
+	}
 
 	return mapper.ToAboutResponse(about)
 }

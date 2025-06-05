@@ -1,6 +1,7 @@
 package implementation
 
 import (
+	"backend/exception"
 	"backend/helper"
 	"backend/helper/mapper"
 	"backend/model/domain"
@@ -61,7 +62,9 @@ func (service *MenuServiceImpl) Update(ctx context.Context, request menudto.Menu
 	defer helper.CommitOrRollback(tx)
 
 	menu, err := service.MenuRepository.FindById(ctx, tx, request.Id)
-	helper.PanicIfError(err)
+	if err != nil {
+		panic(exception.NewNotFoundError(err.Error()))
+	}
 
 	if menu.Thumbnail != "" {
 		if err := helper.DeleteFile(menu.Thumbnail); err != nil {
@@ -88,7 +91,9 @@ func (service *MenuServiceImpl) Delete(ctx context.Context, menuId uint) {
 	defer helper.CommitOrRollback(tx)
 
 	menu, err := service.MenuRepository.FindById(ctx, tx, menuId)
-	helper.PanicIfError(err)
+	if err != nil {
+		panic(exception.NewNotFoundError(err.Error()))
+	}
 
 	service.MenuRepository.Delete(ctx, tx, menu)
 }
@@ -109,7 +114,9 @@ func (service *MenuServiceImpl) FindById(ctx context.Context, menuId uint) menud
 	defer helper.CommitOrRollback(tx)
 
 	menu, err := service.MenuRepository.FindById(ctx, tx, menuId)
-	helper.PanicIfError(err)
+	if err != nil {
+		panic(exception.NewNotFoundError(err.Error()))
+	}
 
 	return mapper.ToMenuResponse(menu)
 }

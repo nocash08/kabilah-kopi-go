@@ -3,6 +3,7 @@ package main
 import (
 	"backend/app"
 	"backend/config"
+	"backend/exception"
 	"backend/helper"
 	"fmt"
 	"net/http"
@@ -28,6 +29,8 @@ func main() {
 		Addr:    "localhost:3000",
 		Handler: router,
 	}
+
+	router.PanicHandler = exception.ErrorHandler
 
 	fmt.Println("Server is running on port 3000")
 	err := server.ListenAndServe()
